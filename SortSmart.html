@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sort Smart</title><style>:root{font:16px/1.55 "Segoe UI",system-ui,sans-serif;--ink:#19293b;--muted:#54657b;--accent:#3755ad;--soft:#eaf0ff;--line:#d7e1ee;--surface:#f1f4fa;color:var(--ink);background:var(--surface)}
+*{box-sizing:border-box}body{margin:0}button,input{font:inherit}button{cursor:pointer}button:disabled{cursor:default;opacity:.64}a{color:var(--accent)}:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+main{max-width:1060px;margin:auto;padding:34px 24px}.hero{background:var(--accent);color:white;border-radius:18px;padding:26px 32px;margin-bottom:20px}.hero p{margin:0}.hero .goal{font-weight:700;font-size:.9rem}.hero h1{font-size:clamp(2rem,6vw,3.1rem);margin:2px 0;letter-spacing:-.055em;line-height:1.15}.hero .subtitle{margin-top:7px;color:#f4f8ff}
+.grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:18px;align-items:start}.panel{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px}.panel h2{font-size:1.22rem;margin:0 0 8px;letter-spacing:-.02em}.panel h3{margin:0 0 5px;font-size:1rem}.panel p{margin:5px 0}.muted{color:var(--muted)}.small{font-size:.89rem}.group{border-top:1px solid var(--line);margin-top:15px;padding-top:13px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}button{border:1px solid transparent;border-radius:8px;padding:8px 12px;background:var(--accent);color:white;font-weight:650}.quiet,.choice{background:var(--soft);color:var(--accent);border-color:var(--line)}.choice{text-align:left}.option-list{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:13px 0}.tag{font-size:.83rem;color:var(--accent);font-weight:700}.question{font-weight:750;font-size:1.65rem;letter-spacing:-.035em}.result{background:var(--soft);border-radius:9px;padding:12px;margin:13px 0}.positive{color:#126345}.retry{color:#813208}.controls{margin-top:13px}
+.metric{margin:9px 0}.metric label{display:flex;justify-content:space-between;gap:8px;font-size:.9rem;font-weight:600}progress{accent-color:var(--accent);width:100%;height:10px;display:block;margin-top:3px}
+input[type=text]{border:1px solid #a7b4c5;border-radius:8px;padding:8px 10px;width:100%;min-width:0;background:white;color:var(--ink)}.entry{display:flex;gap:8px;margin-top:6px}.entry button{white-space:nowrap}.sample{font-size:.82rem;padding:5px 8px}.history{margin:8px 0 0;padding:0;list-style:none}.history li{border-top:1px solid var(--line);padding:7px 0;font-size:.86rem;overflow-wrap:anywhere}.history li b{display:block}.category{display:block;font-size:1.3rem;font-weight:740}.verdict{overflow-wrap:anywhere}
+@media(max-width:720px){main{padding:14px}.hero{padding:19px}.grid{grid-template-columns:1fr}.panel{padding:15px}}
+</style>
+<style>:root{--accent:#17654f;--soft:#e5f4ec;--surface:#edf5ef;--line:#cddfd4}</style></head>
+<body>
+<main>
+ <header class="hero"><p class="goal">SDG 12 · Responsible Consumption and Production</p><h1>Sort Smart</h1><p class="subtitle">Describe a household item to get an estimated waste category and a suggested next step.</p></header>
+ <div class="grid">
+  <section class="panel" aria-labelledby="sort-title">
+   <h2 id="sort-title">Check an item</h2>
+   <form id="sort-form">
+    <label for="description">Item description</label>
+    <div class="entry"><input id="description" type="text" required maxlength="120" autocomplete="off" placeholder="For example, an empty aluminium can"><button>Classify</button></div>
+   </form>
+   <div class="group"><h3>Try an example</h3><div class="row" id="examples"></div></div>
+   <div class="result verdict" id="result" aria-live="polite"><strong class="category">Ready to sort</strong><p>Use one item per check. Add its material and condition if you know them.</p></div>
+   <div class="group small muted">Accepted materials vary by location. Verify collection rules for your building or municipality.</div>
+  </section>
+  <aside class="panel" aria-labelledby="insights">
+   <h2 id="insights">Sorting dashboard</h2>
+   <p class="muted small" id="method">Category scores appear after a classification.</p>
+   <div id="scores"></div>
+   <div class="group">
+    <div class="row" style="justify-content:space-between"><h3>Recent checks</h3><button class="quiet sample" id="clear" disabled>Clear</button></div>
+    <ul class="history" id="history"><li class="muted">No items checked yet.</li></ul>
+   </div>
+  </aside>
+ </div>
+</main>
+<script>
+"use strict";
+const categories = [
+  {name:"Likely recyclable", tip:"Check whether your dry recycling service takes this material and item shape. Empty the container before placing it in an accepted stream.", examples:[
+    "empty aluminium soda can","clean aluminum drink can","metal tin food can","dry paper newspaper","clean cardboard shipping box",
+    "corrugated cardboard carton","plain office paper sheet","empty glass bottle","clean glass jar","empty plastic water bottle","clear pet beverage bottle","clean milk jug"
+  ]},
+  {name:"Likely organic", tip:"Check whether a local food-scrap collection or composting program accepts this item. Separate any packaging first.", examples:[
+    "banana peel","apple core","fruit skins and peels","orange peel","vegetable scraps","potato peel",
+    "carrot trimmings","coffee grounds","used tea leaves","egg shells","eggshell","lettuce leaves"
+  ]},
+  {name:"Likely residual", tip:"Keep this out of dry recycling unless a local program specifically accepts it. Check for a dedicated collection route before using general waste.", examples:[
+    "used tissue","wet tissue paper","dirty diaper","used nappy","broken ceramic mug","ceramic plate shards",
+    "multilayer chip packet","plastic snack wrapper","greasy takeaway container","greasy pizza box","soiled paper towel","disposable wipe"
+  ]},
+  {name:"Special collection", tip:"Check with your municipality or an authorised collection service for an appropriate take-back or drop-off route.", examples:[
+    "lithium battery","used alkaline batteries","rechargeable battery","old mobile phone","broken smartphone","discarded laptop",
+    "electronics e waste","circuit board","paint tin with paint","fluorescent bulb","mercury lamp","power bank"
+  ]}
+];
+const stop = new Set("a an the this that old used up is it where do i put what about my of in with from and".split(" "));
+const aliases = {aluminum:"aluminium", batteries:"battery", boxes:"box", leaves:"leaf", skins:"skin", grounds:"ground", eggshells:"eggshell"};
+function tokens(value) {
+  return (value.toLowerCase().match(/[a-z]+/g) || [])
+    .filter(word => !stop.has(word))
+    .map(word => aliases[word] || (word.length > 3 && /[^su]s$/.test(word) && !word.endsWith("ss") ? word.slice(0, -1) : word));
+}
+const vocabulary = new Set();
+const counts = categories.map(category => {
+  const frequencies = new Map();
+  let size = 0;
+  for (const word of category.examples.flatMap(tokens)) {
+    vocabulary.add(word);
+    frequencies.set(word, (frequencies.get(word) || 0) + 1);
+    size++;
+  }
+  return {frequencies, size};
+});
+const totalExamples = categories.reduce((sum, category) => sum + category.examples.length, 0);
+const specialTerms = new Set(["battery","lithium","mercury","fluorescent","paint","electronics","laptop","smartphone"]);
+const unknown = "Needs clarification";
+function predict(description) {
+  const words = [...new Set(tokens(description))];
+  const matches = words.filter(word => vocabulary.has(word));
+  const special = words.filter(word => specialTerms.has(word));
+  if (special.length) return {label:categories[3].name, tip:categories[3].tip,
+    reason:"Special-item check matched: " + special.join(", ") + ".", scores:[]};
+  if (!matches.length) return {label:unknown, tip:"Describe the material and item, for example “cardboard shipping box”. Check local guidance if you are unsure.", reason:"No words matched the model vocabulary.", scores:[]};
+  const log = counts.map(({frequencies, size}, index) =>
+    Math.log(categories[index].examples.length / totalExamples) +
+    matches.reduce((sum, word) => sum + Math.log(((frequencies.get(word) || 0) + 1) / (size + vocabulary.size)), 0));
+  const offset = Math.max(...log);
+  const weights = log.map(value => Math.exp(value - offset));
+  const total = weights.reduce((sum, value) => sum + value, 0);
+  const scores = weights.map((weight, index) => ({...categories[index], share:weight / total})).sort((a, b) => b.share - a.share);
+  const [first, second] = scores;
+  const weak = first.share < 0.53 || first.share - second.share < 0.17;
+  return {
+    label:weak ? unknown : first.name,
+    tip:weak ? "Use one item per check and add its material or condition. If the item mixes materials, check local instructions." : first.tip,
+    reason:"Words used by the model: " + matches.join(", ") + ".",
+    scores
+  };
+}
+const get = id => document.getElementById(id);
+const recent = [];
+function history() {
+  const rows = recent.map(({description, label}) => {
+    const item = document.createElement("li");
+    const name = document.createElement("b");
+    name.textContent = label;
+    item.append(name, description);
+    return item;
+  });
+  if (!rows.length) {
+    const empty = document.createElement("li");
+    empty.className = "muted";
+    empty.textContent = "No items checked yet.";
+    rows.push(empty);
+  }
+  get("history").replaceChildren(...rows);
+  get("clear").disabled = !recent.length;
+}
+function classify(description) {
+  const {label, tip, reason, scores} = predict(description);
+  const title = document.createElement("strong");
+  title.className = "category";
+  title.textContent = label;
+  const details = document.createElement("p");
+  details.textContent = tip;
+  const evidence = document.createElement("p");
+  evidence.className = "small muted";
+  evidence.textContent = reason;
+  get("result").replaceChildren(title, details, evidence);
+  get("method").textContent = scores.length ? "Relative model scores. These scores are not calibrated probabilities." : "This check did not use category scores.";
+  get("scores").replaceChildren(...scores.map(({name, share}, index) => {
+    const item = document.createElement("div");
+    item.className = "metric";
+    const label = document.createElement("label");
+    label.htmlFor = "score-" + index;
+    const percent = Math.round(100 * share);
+    label.textContent = name + " · " + percent + "%";
+    const meter = document.createElement("progress");
+    meter.id = label.htmlFor;
+    meter.max = 100;
+    meter.value = percent;
+    item.append(label, meter);
+    return item;
+  }));
+  recent.unshift({description, label});
+  recent.splice(5);
+  history();
+}
+get("sort-form").addEventListener("submit", event => {
+  event.preventDefault();
+  const value = get("description").value.trim();
+  if (value) classify(value);
+  else get("description").focus();
+});
+get("clear").addEventListener("click", () => {
+  recent.length = 0;
+  history();
+  get("description").focus();
+});
+for (const text of ["Clean cardboard box","Banana peel","Broken ceramic mug","Laptop battery"]) {
+  const button = document.createElement("button");
+  button.className = "quiet sample";
+  button.textContent = text;
+  button.addEventListener("click", () => {
+    get("description").value = text;
+    classify(text);
+  });
+  get("examples").append(button);
+}
+</script>
+</body></html>
